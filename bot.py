@@ -76,7 +76,7 @@ def check_join(uid):
 def menu(uid):
     m = types.InlineKeyboardMarkup(row_width=2)
 
-    m.add(types.InlineKeyboardButton("🎬 Video", callback_data="video"))
+    m.add(types.InlineKeyboardButton("🎵 TikTok ভিডিও", callback_data="video"))
 
     if int(uid) == ADMIN_ID:
         m.add(types.InlineKeyboardButton("👑 Admin Panel", callback_data="admin"))
@@ -93,10 +93,8 @@ def start(msg):
 
     bot.send_message(
         uid,
-        f"""👋 Welcome
-
-🎬 Video Left: {VIDEO_LIMIT - u['video']}
-💎 Premium: {'YES' if u['premium'] else 'NO'}""",
+        f"👋 স্বাগতম\n\n🎵 TikTok ভিডিও বাকি: {VIDEO_LIMIT - u['video']}\n💎 প্রিমিয়াম: {'হ্যাঁ ✅' if u['premium'] else 'না ❌'}"
+        ,
         reply_markup=menu(uid)
     )
 
@@ -108,20 +106,20 @@ def cb(c):
 
     bot.answer_callback_query(c.id)
 
-    # -------- VIDEO --------
+    # -------- TIKTOK VIDEO --------
     if c.data == "video":
 
         if not check_join(uid):
             return
 
         if u["video"] >= VIDEO_LIMIT and not u["premium"]:
-            bot.send_message(uid, "❌ Video limit শেষ!")
+            bot.send_message(uid, "❌ আজকের লিমিট শেষ! 💎 প্রিমিয়াম নিন আনলিমিটেড ভিডিওর জন্য")
             return
 
-        bot.send_message(uid, "🎬 YouTube link পাঠাও:")
-        bot.register_next_step_handler(c.message, download_video)
+        bot.send_message(uid, "🎵 TikTok লিংক পাঠাও (URL):")
+        bot.register_next_step_handler(c.message, download_tiktok)
 
-    # -------- ADMIN --------
+    # -------- ADMIN PANEL --------
     elif c.data == "admin":
         if uid != ADMIN_ID:
             return
@@ -129,39 +127,54 @@ def cb(c):
         total = len(user_data)
         premium = sum(1 for x in user_data.values() if x["premium"])
 
-        bot.send_message(uid, f"""👑 ADMIN PANEL
+        m = types.InlineKeyboardMarkup(row_width=1)
+        m.add(types.InlineKeyboardButton("🔍 ইউজার খুঁজুন", callback_data="find_user"))
+        m.add(types.InlineKeyboardButton("💎 প্রিমিয়াম দিন", callback_data="give_premium"))
+        m.add(types.InlineKeyboardButton("❌ প্রিমিয়াম সরান", callback_data="remove_premium"))
 
-👥 Users: {total}
-💎 Premium: {premium}""")
+        bot.send_message(uid, f"👑 ADMIN PANEL\n\n👥 মোট ইউজার: {total}\n💎 প্রিমিয়াম ইউজার: {premium}", reply_markup=m)
 
-    # -------- PREMIUM GIVE --------
-    elif c.data.startswith("make_premium_"):
+    # -------- FIND USER --------
+    elif c.data == "find_user":
         if uid != ADMIN_ID:
             return
+        bot.send_message(uid, "🔍 ইউজার ID পাঠাও:")
+        bot.register_next_step_handler(c.message, find_user_handler)
 
-        target = c.data.split("_")[2]
-        if target in user_data:
-            user_data[target]["premium"] = True
-            save_db()
-            bot.send_message(uid, "✅ Premium given!")
-        else:
-            bot.send_message(uid, "❌ User not found")
+    # -------- GIVE PREMIUM --------
+    elif c.data == "give_premium":
+        if uid != ADMIN_ID:
+            return
+        bot.send_message(uid, "💎 যাকে প্রিমিয়াম দিতে চান তার ID পাঠাও:")
+        bot.register_next_step_handler(c.message, give_premium_handler)
 
-# ================= VIDEO =================
-def download_video(msg):
+    # -------- REMOVE PREMIUM --------
+    elif c.data == "remove_premium":
+        if uid != ADMIN_ID:
+            return
+        bot.send_message(uid, "❌ যাকে প্রিমিয়াম সরাতে চান তার ID পাঠাও:")
+        bot.register_next_step_handler(c.message, remove_premium_handler)
+
+# ================= TIKTOK DOWNLOAD =================
+def download_tiktok(msg):
     uid = msg.chat.id
     u = get_user(uid)
     link = msg.text.strip()
 
-    bot.send_message(uid, "⏳ Download হচ্ছে...")
+    if "tiktok.com" not in link:
+        bot.send_message(uid, "❌ এটা TikTok লিংক নয়! সঠিক TikTok URL পাঠাও")
+        return
+
+    bot.send_message(uid, "⏳ ডাউনলোড হচ্ছে... অপেক্ষা করুন 🎵")
 
     try:
-        file = f"{uid}.mp4"
+        file = f"tiktok_{uid}.mp4"
 
         ydl_opts = {
-            "format": "best[ext=mp4]",
+            "format": "best",
             "outtmpl": file,
-            "quiet": True
+            "quiet": True,
+            "no_warnings": True
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -176,22 +189,58 @@ def download_video(msg):
             u["video"] += 1
             save_db()
 
-        bot.send_message(uid, "✅ Done!")
+        bot.send_message(uid, "✅ ভিডিও পাঠানো হয়েছে! 🎉")
 
     except Exception as e:
-        bot.send_message(uid, f"❌ Error: {e}")
+        bot.send_message(uid, f"❌ ত্রুটি: {str(e)}")
 
-# ================= ADMIN GIVE PREMIUM =================
-@bot.message_handler(func=lambda m: m.chat.id == ADMIN_ID)
-def admin_text(msg):
+# ================= ADMIN HANDLERS =================
+def find_user_handler(msg):
+    if msg.chat.id != ADMIN_ID:
+        return
+    
     try:
         uid = msg.text.strip()
-        user_data[uid]["premium"] = True
-        save_db()
-        bot.send_message(msg.chat.id, f"✅ Premium given to {uid}")
+        if uid in user_data:
+            u = user_data[uid]
+            info = f"""👤 ইউজার তথ্য:\n\nID: {uid}\n🎬 ভিডিও ডাউনলোড: {u['video']}\n💎 প্রিমিয়াম: {'হ্যাঁ ✅' if u['premium'] else 'না ❌'}\n📅 তারিখ: {u['date']}\n🔗 রেফারেল: {u['ref']}"""
+            bot.send_message(msg.chat.id, info)
+        else:
+            bot.send_message(msg.chat.id, "❌ এই ইউজার পাওয়া যায়নি")
     except:
-        pass
+        bot.send_message(msg.chat.id, "❌ ত্রুটি! সঠিক ইউজার ID পাঠান")
+
+
+def give_premium_handler(msg):
+    if msg.chat.id != ADMIN_ID:
+        return
+    
+    try:
+        uid = msg.text.strip()
+        if uid in user_data:
+            user_data[uid]["premium"] = True
+            save_db()
+            bot.send_message(msg.chat.id, f"✅ {uid} কে প্রিমিয়াম দেওয়া হয়েছে")
+        else:
+            bot.send_message(msg.chat.id, "❌ ইউজার পাওয়া যায়নি")
+    except:
+        bot.send_message(msg.chat.id, "❌ ত্রুটি!")
+
+def remove_premium_handler(msg):
+    if msg.chat.id != ADMIN_ID:
+        return
+    
+    try:
+        uid = msg.text.strip()
+        if uid in user_data:
+            user_data[uid]["premium"] = False
+            save_db()
+            bot.send_message(msg.chat.id, f"✅ {uid} এর প্রিমিয়াম সরানো হয়েছে")
+        else:
+            bot.send_message(msg.chat.id, "❌ ইউজার পাওয়া যায়নি")
+    except:
+        bot.send_message(msg.chat.id, "❌ ত্রুটি!")
 
 # ================= RUN =================
-print("🚀 PRO BOT RUNNING...")
+print("🚀 TIKTOK BOT চালু হয়েছে...")
 bot.infinity_polling()
