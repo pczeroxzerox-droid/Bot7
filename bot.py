@@ -7,7 +7,7 @@ from telebot import types
 import yt_dlp
 
 # ================= CONFIG =================
-API_TOKEN = os.getenv("BOT_API_TOKEN", "8615288381:AAGwDHusKLlS4zTrf6IOiFuLLf9DICYcOCM")
+API_TOKEN = os.getenv("BOT_API_TOKEN", "8311544685:AAHyxtexwj_bPCutRhM1mfvWjLNMhfomn9M")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 8210146346))
 
 CHANNEL_1 = "@samiedit9"
